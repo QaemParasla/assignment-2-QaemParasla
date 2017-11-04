@@ -1,6 +1,10 @@
 # For this part of the assignment, You can use inbuilt functions to compute the fourier transform
 # You are welcome to use fft that are available in numpy and opencv
-
+import cv2
+import numpy as np
+import math
+import cmath
+from PIL import Image
 
 class Filtering:
     image = None
@@ -8,7 +12,7 @@ class Filtering:
     cutoff = None
     order = None
 
-    def __init__(self, image, filter_name, cutoff, order = 0):
+    def __init__(self, image, filter_name, cutoff, order=0):
         """initializes the variables frequency filtering on an input image
         takes as input:
         image: the input image
@@ -33,7 +37,6 @@ class Filtering:
         self.cutoff = cutoff
         self.order = order
 
-
     def get_ideal_low_pass_filter(self, shape, cutoff):
         """Computes a Ideal low pass mask
         takes as input:
@@ -41,9 +44,19 @@ class Filtering:
         cutoff: the cutoff frequency of the ideal filter
         returns a ideal low pass mask"""
 
+        row, col = shape
 
-        return 0
+        mask = np.zeros([row, col])
 
+        for u in range(row):
+            for v in range(col):
+                if np.sqrt((u - row / 2) ** 2 + (v - col / 2) ** 2) <= cutoff:
+                    mask[u][v] = 1
+
+        im = Image.fromarray(mask.real)
+        im.show()
+
+        return mask
 
     def get_ideal_high_pass_filter(self, shape, cutoff):
         """Computes a Ideal high pass mask
@@ -52,9 +65,9 @@ class Filtering:
         cutoff: the cutoff frequency of the ideal filter
         returns a ideal high pass mask"""
 
-        #Hint: May be one can use the low pass filter function to get a high pass mask
+        # Hint: May be one can use the low pass filter function to get a high pass mask
 
-        
+
         return 0
 
     def get_butterworth_low_pass_filter(self, shape, cutoff, order):
@@ -65,8 +78,17 @@ class Filtering:
         order: the order of the butterworth filter
         returns a butterworth low pass mask"""
 
-        
-        return 0
+        row, col = shape
+        mask = np.zeros([row, col])
+
+        for u in range(row):
+            for v in range(col):
+                mask[u][v] = 1 / (1 + (np.sqrt((u-row/2)**2+(v-col/2)**2) / cutoff) ** (2 * order))
+
+        im = Image.fromarray(mask.real)
+        im.show()
+
+        return mask
 
     def get_butterworth_high_pass_filter(self, shape, cutoff, order):
         """Computes a butterworth high pass mask
@@ -76,9 +98,9 @@ class Filtering:
         order: the order of the butterworth filter
         returns a butterworth high pass mask"""
 
-        #Hint: May be one can use the low pass filter function to get a high pass mask
+        # Hint: May be one can use the low pass filter function to get a high pass mask
 
-        
+
         return 0
 
     def get_gaussian_low_pass_filter(self, shape, cutoff):
@@ -88,7 +110,6 @@ class Filtering:
         cutoff: the cutoff frequency of the gaussian filter (sigma)
         returns a gaussian low pass mask"""
 
-        
         return 0
 
     def get_gaussian_high_pass_filter(self, shape, cutoff):
@@ -98,9 +119,9 @@ class Filtering:
         cutoff: the cutoff frequency of the gaussian filter (sigma)
         returns a gaussian high pass mask"""
 
-        #Hint: May be one can use the low pass filter function to get a high pass mask
+        # Hint: May be one can use the low pass filter function to get a high pass mask
 
-        
+
         return 0
 
     def post_process_image(self, image):
@@ -113,13 +134,11 @@ class Filtering:
         2. take negative (255 - fsimage)
         """
 
-
         return image
-
 
     def filtering(self):
         """Performs frequency filtering on an input image
-        returns a filtered image, magnitude of DFT, magnitude of filtered DFT        
+        returns a filtered image, magnitude of DFT, magnitude of filtered DFT
         ----------------------------------------------------------
         You are allowed to used inbuilt functions to compute fft
         There are packages available in numpy as well as in opencv
@@ -134,10 +153,31 @@ class Filtering:
         8. You will need to do a full contrast stretch on the magnitude and depending on the algorithm you may also need to
         take negative of the image to be able to view it (use post_process_image to write this code)
         Note: You do not have to do zero padding as discussed in class, the inbuilt functions takes care of that
-        filtered image, magnitude of DFT, magnitude of filtered DFT: Make sure all images being returned have grey scale full contrast stretch and dtype=uint8 
+        filtered image, magnitude of DFT, magnitude of filtered DFT: Make sure all images being returned have grey scale full contrast stretch and dtype=uint8
         """
 
+        #np.set_printoptions(threshold=np.nan)
+
+        # 1 compute the fft of the image
+        matrix = np.fft.fft2(self.image, s=None, axes=None, norm=None)
+
+        #2. shift the fft to center the low frequencies
+        matrix = np.fft.fftshift(matrix, axes=None)
+
+        #3. get the mask
+        mask = self.filter(self.image.shape, self.cutoff)
+
+        #4 Convolution theorem)
+        imgFreq = np.fft.fft2(matrix, s=None, axes=None, norm=None) * np.fft.fft2(mask, s=None, axes=None, norm=None)
+
+        #5 compute the inverse shift
+        inverseShift = np.fft.ifftshift(imgFreq)
+
+        #6 compute the inverse fourier transform
+        ift = np.fft.ifft(inverseShift, n=None, axis=-1, norm=None)
 
 
+        #7 magnitud
+        mag = abs(ift)
 
         return [self.image, self.image, self.image]
