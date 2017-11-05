@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 import math
 import cmath
-from PIL import Image
 
 class Filtering:
     image = None
@@ -45,16 +44,12 @@ class Filtering:
         returns a ideal low pass mask"""
 
         row, col = shape
-
         mask = np.zeros([row, col])
 
         for u in range(row):
             for v in range(col):
                 if np.sqrt((u - row / 2) ** 2 + (v - col / 2) ** 2) <= cutoff:
-                    mask[u][v] = 1
-
-        im = Image.fromarray(mask.real)
-        im.show()
+                    mask[u,v] = 1
 
         return mask
 
@@ -67,8 +62,15 @@ class Filtering:
 
         # Hint: May be one can use the low pass filter function to get a high pass mask
 
+        row, col = shape
+        mask = np.zeros([row, col])
 
-        return 0
+        for u in range(row):
+            for v in range(col):
+                if np.sqrt((u - row / 2) ** 2 + (v - col / 2) ** 2) > cutoff:
+                    mask[u, v] = 1
+
+        return mask
 
     def get_butterworth_low_pass_filter(self, shape, cutoff, order):
         """Computes a butterworth low pass mask
@@ -83,10 +85,7 @@ class Filtering:
 
         for u in range(row):
             for v in range(col):
-                mask[u][v] = 1 / (1 + (np.sqrt((u-row/2)**2+(v-col/2)**2) / cutoff) ** (2 * order))
-
-        im = Image.fromarray(mask.real)
-        im.show()
+                mask[u,v] = 1 / (1 + (np.sqrt((u-row/2)**2+(v-col/2)**2) / cutoff) ** (2 * order))
 
         return mask
 
@@ -99,9 +98,15 @@ class Filtering:
         returns a butterworth high pass mask"""
 
         # Hint: May be one can use the low pass filter function to get a high pass mask
+        row, col = shape
+        mask = np.zeros([row, col])
 
+        for u in range(row):
+            for v in range(col):
+                mask[u,v] = 1 / (1 + cutoff / (np.sqrt((u - row / 2) ** 2 + (v - col / 2) ** 2)) ** (2 * order))
 
-        return 0
+        return mask
+
 
     def get_gaussian_low_pass_filter(self, shape, cutoff):
         """Computes a gaussian low pass mask
@@ -110,7 +115,15 @@ class Filtering:
         cutoff: the cutoff frequency of the gaussian filter (sigma)
         returns a gaussian low pass mask"""
 
-        return 0
+        row, col = shape
+        mask = np.zeros([row, col])
+
+        for u in range(row):
+            for v in range(col):
+                mask[u,v] = np.exp(((-np.sqrt((u - row / 2) ** 2 + (v - col / 2) ** 2)) ** 2) / (2 * (cutoff ** 2)))
+
+        return mask
+
 
     def get_gaussian_high_pass_filter(self, shape, cutoff):
         """Computes a gaussian high pass mask
@@ -121,8 +134,17 @@ class Filtering:
 
         # Hint: May be one can use the low pass filter function to get a high pass mask
 
+        row, col = shape
+        mask = np.zeros([row, col])
 
-        return 0
+        for u in range(row):
+            for v in range(col):
+                mask[u, v] = 1-np.exp(((-np.sqrt((u - row / 2) ** 2 + (v - col / 2) ** 2)) ** 2) / (2 * (cutoff ** 2)))
+
+        # im = Image.fromarray(mask.real)
+        # im.show()
+
+        return mask
 
     def post_process_image(self, image):
         """Post process the image to create a full contrast stretch of the image
@@ -134,7 +156,20 @@ class Filtering:
         2. take negative (255 - fsimage)
         """
 
-        return image
+        #1
+        row, col = image.shape
+        fcs = np.zeros((row, col), dtype=np.uint8)
+    
+        max = image.real.max()
+        min = image.real.min()
+        maxminusmin = max - min
+        k = 254
+
+        for x in range(row):
+            for y in range(col):
+                fcs[x,y] = math.floor(((k/maxminusmin)*image[x,y]-1) + 0.5)
+
+        return fcs
 
     def filtering(self):
         """Performs frequency filtering on an input image
@@ -159,25 +194,42 @@ class Filtering:
         #np.set_printoptions(threshold=np.nan)
 
         # 1 compute the fft of the image
-        matrix = np.fft.fft2(self.image, s=None, axes=None, norm=None)
+        dft = np.fft.fft2(self.image, s=None, axes=None, norm=None)
+        row, col = dft.shape
+        mag_matrix = np.zeros((row, col))
+
+        for u in range(row):
+            for v in range(col):
+                mag_matrix[u, v] = math.sqrt(dft[u, v].real ** 2 + dft[u, v].imag ** 2)
+        dftimg = self.post_process_image(mag_matrix)
 
         #2. shift the fft to center the low frequencies
-        matrix = np.fft.fftshift(matrix, axes=None)
+        fshift = np.fft.fftshift(dft, axes=None)
 
         #3. get the mask
-        mask = self.filter(self.image.shape, self.cutoff)
+        if self.filter.__name__ == "get_ideal_low_pass_filter" or "get_ideal_high_pass_filter":
+            mask = self.filter(self.image.shape, self.cutoff)
+        else:
+            mask = self.filter(self.image.shape, self.cutoff, self.order)
 
         #4 Convolution theorem)
-        imgFreq = np.fft.fft2(matrix, s=None, axes=None, norm=None) * np.fft.fft2(mask, s=None, axes=None, norm=None)
+
 
         #5 compute the inverse shift
-        inverseShift = np.fft.ifftshift(imgFreq)
+        inverseShift = np.fft.ifftshift(fshift)
 
         #6 compute the inverse fourier transform
         ift = np.fft.ifft(inverseShift, n=None, axis=-1, norm=None)
 
+        fcs = self.post_process_image(ift)
 
-        #7 magnitud
-        mag = abs(ift)
+        #7 magnitude
+        row, col = ift.shape
+        mag_matrix = np.zeros((row, col))
 
-        return [self.image, self.image, self.image]
+        for u in range(row):
+            for v in range(col):
+                mag_matrix[u, v] = math.sqrt(ift[u, v].real ** 2 + ift[u, v].imag ** 2)
+
+
+        return [self.image, dftimg, self.image]
