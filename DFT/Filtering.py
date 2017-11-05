@@ -201,7 +201,7 @@ class Filtering:
         for u in range(row):
             for v in range(col):
                 mag_matrix[u, v] = math.sqrt(dft[u, v].real ** 2 + dft[u, v].imag ** 2)
-        dftimg = self.post_process_image(mag_matrix)
+        dftimg = self.post_process_image(np.log(mag_matrix))
 
         #2. shift the fft to center the low frequencies
         fshift = np.fft.fftshift(dft, axes=None)
